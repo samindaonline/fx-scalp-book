@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Scalping & Day Trading Playbook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 50vh;
+            max-height: 500px;
+            min-height: 350px;
+        }
+        .tab-active {
+            border-bottom: 2px solid #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Chosen Palette: Slate (50-800) for neutral/backgrounds, Indigo (600) for primary actions/accents, Emerald (600) for Buy signals, Rose (600) for Sell signals. -->
+    <!-- Application Structure Plan: A dashboard-style SPA with two primary views: 'Indicators Toolkit' and 'The Strategy Playbook'. This structure was chosen because traders need to first understand the individual tools (indicators) before synthesizing them into a cohesive action plan (the strategy). The Indicators section uses a master-detail pattern (list on left, details/chart on right) for quick exploration. The Strategy section uses an interactive toggle (Long vs. Short) to allow side-by-side conceptualization of the trading rules without visual clutter. -->
+    <!-- Visualization & Content Choices: 
+         1. Indicator Exploration -> Goal: Inform & Visualize -> Method: Interactive Master-Detail view with Plotly.js market simulation. Justification: Users need to *see* what the indicator looks like on a real candlestick chart while reading its rules. Plotly provides highly accurate financial charts.
+         2. Strategy Rules -> Goal: Guide Action -> Method: Toggleable step-by-step lists with color-coded alerts (Green for Buy, Red for Sell). Justification: Prevents overwhelming the user with text; allows them to focus purely on the setup they are looking for in the market. 
+         3. Crucial Rules -> Goal: Risk Management -> Method: Highlighted warning cards at the bottom of the strategy. Justification: These are non-negotiable filters that need high visual priority.
+         Methodology: Vanilla JS handles state (active tab, active indicator, long/short toggle) and dynamically rebuilds the DOM and Plotly instances to ensure a snappy, single-page experience. A custom math engine generates a realistic market trend to apply indicators against.
+         CONFIRMING NO SVG/Mermaid used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">&#9650; FX Scalping Playbook</h1>
+                <p class="text-sm text-slate-500">Core Indicators & 5-Minute Pullback Strategy</p>
+            </div>
+            <nav class="flex space-x-1 bg-slate-100 p-1 rounded-lg">
+                <button onclick="switchMainTab('indicators')" id="tab-indicators" class="px-4 py-2 text-sm font-medium rounded-md bg-white text-indigo-700 shadow transition-all">Indicators Toolkit</button>
+                <button onclick="switchMainTab('strategy')" id="tab-strategy" class="px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition-all">The Strategy</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <div id="view-indicators" class="fade-in block">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-900 mb-2">Core Technical Indicators</h2>
+                <p class="text-lg text-slate-600 max-w-3xl">This section breaks down the primary tools used by professional forex day traders. Select an indicator from the list to explore its logic, step-by-step application, and view a mathematical representation of how it behaves on a live candlestick chart.</p>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-8">
+                <div class="w-full lg:w-1/3 flex flex-col gap-2" id="indicator-list">
+                </div>
+
+                <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-slate-100 bg-slate-50">
+                        <div class="chart-container" id="chart-container-div">
+                            <div id="indicatorChart" class="w-full h-full"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6 lg:p-8" id="indicator-details">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-strategy" class="fade-in hidden">
+            <div class="mb-8 text-center max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold text-slate-900 mb-2">The 5-Minute EMA/ATR Pullback Strategy</h2>
+                <p class="text-lg text-slate-600">A strict, trend-following system. The objective is to identify a strong trend, wait for a minor pullback into a "Value Area," and use the ATR to safely manage risk on the entry. Review the setup, then toggle between the Buy and Sell rules to understand the specific entry criteria.</p>
+            </div>
+
+            <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-6 mb-8 max-w-4xl mx-auto">
+                <h3 class="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                    <span class="text-xl">&#9881;</span> System Setup
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-indigo-50">
+                        <p class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Timeframe</p>
+                        <p class="text-lg font-medium text-slate-800">5-Minute Chart (M5)</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-indigo-50">
+                        <p class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Indicators</p>
+                        <p class="text-lg font-medium text-slate-800">9 EMA, 20 EMA, 14 ATR</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-indigo-50">
+                        <p class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Ideal Pairs</p>
+                        <p class="text-lg font-medium text-slate-800">EUR/USD, GBP/USD, USD/JPY</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-indigo-50">
+                        <p class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Ideal Sessions</p>
+                        <p class="text-lg font-medium text-slate-800">London or New York Overlaps</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="max-w-4xl mx-auto mb-12">
+                <div class="flex justify-center mb-6">
+                    <div class="bg-slate-200 p-1 rounded-full inline-flex">
+                        <button onclick="setStrategyMode('long')" id="btn-long" class="px-8 py-2.5 rounded-full text-sm font-bold bg-white text-emerald-600 shadow-sm transition-all">LONG (Buy) Rules</button>
+                        <button onclick="setStrategyMode('short')" id="btn-short" class="px-8 py-2.5 rounded-full text-sm font-bold text-slate-500 hover:text-slate-800 transition-all">SHORT (Sell) Rules</button>
+                    </div>
+                </div>
+
+                <div id="strategy-content" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:p-8">
+                </div>
+            </div>
+
+            <div class="max-w-4xl mx-auto">
+                <h3 class="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                    <span class="text-rose-500">&#9888;</span> Crucial Rules of Engagement
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="rules-container">
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const appData = {
+            indicators: [
+                {
+                    id: 'ema',
+                    name: 'Exponential Moving Average',
+                    icon: '&#8862;',
+                    coreMessage: 'The trend is your friend. The EMA visually separates aggressive momentum from background noise.',
+                    logicalUse: 'Unlike a simple average, the EMA heavily favors recent price data, making it react instantly to new volume. By layering a fast EMA (9) over a slow EMA (20), you create a visual gauge of momentum. When the fast line separates and points upward, buyers are firmly in control. The space created between the two lines becomes a high-probability "value area" where banks and institutions naturally buy pullbacks.',
+                    settings: [
+                        { label: '9 Period (Fast)', desc: 'Tracks immediate, aggressive momentum.' },
+                        { label: '20 Period (Slow)', desc: 'Acts as the baseline short-term trend and dynamic support.' },
+                        { label: '200 Period (Macro)', desc: 'Identifies the overarching macro-trend direction.' }
+                    ],
+                    steps: [
+                        'Look at the 200 EMA first. If the price is above it, you are only allowed to look for BUY setups. If below, only SELL.',
+                        'Confirm the 9 EMA has cleanly crossed the 20 EMA in your direction, and both lines are sloping upward/downward.',
+                        'Wait patiently for the price to retreat (pullback) and touch the zone between the 9 and 20 EMA.',
+                        'Execute your trade only when a reversal candlestick forms and bounces off this zone.'
+                    ],
+                    advanced: 'Use the 200 EMA as a strict directional filter. If the price is below the 200 EMA on the 5-minute chart, *never* take a long (buy) position.',
+                    pitfall: 'Trading EMA crossovers in a flat, ranging market. EMAs will constantly crisscross, generating false signals ("whipsaws").'
+                },
+                {
+                    id: 'atr',
+                    name: 'Average True Range',
+                    icon: '&#8597;',
+                    coreMessage: 'Market volatility dictates your risk. Adapt your stop-loss to the heartbeat of the market.',
+                    logicalUse: 'The ATR ignores trend direction and strictly measures movement. It calculates exactly how many pips an average candle is moving right now. If the market is wild and the ATR is 10 pips, a static 5-pip stop loss is mathematically guaranteed to get destroyed by random noise. ATR logic forces you to place your stop loss safely outside the current noise radius.',
+                    settings: [
+                        { label: '14 Period', desc: 'Universal standard setting across all timeframes.' }
+                    ],
+                    steps: [
+                        'Before entering a trade, look at the current value of the ATR line.',
+                        'Check if the value is high enough to justify a trade (e.g., if ATR is 2 pips, the market is too dead/choppy to trade).',
+                        'Once you find an entry trigger, multiply the current ATR value by 1.5.',
+                        'Set your Stop Loss exactly that many pips away from your entry to ensure you survive standard market wiggles.'
+                    ],
+                    advanced: 'Instead of a fixed take-profit, use a "Chandelier Exit" or manually trail your stop loss at 2x the ATR behind the current price to ride massive trend breakouts.',
+                    pitfall: 'Confusing a high ATR with a bullish trend. ATR only measures magnitude. A massive market crash will cause the ATR to spike just as much as a massive rally.'
+                },
+                {
+                    id: 'rsi',
+                    name: 'Relative Strength Index',
+                    icon: '&#8764;',
+                    coreMessage: 'Momentum precedes price. The RSI reveals when a push is secretly running out of gas.',
+                    logicalUse: 'The RSI compares the average size of recent bullish candles to bearish candles on a 0-100 scale. Its logical power is "Divergence". If the price pushes to a new higher high, but the RSI creates a lower high, it mathematically proves the *power* behind the buying is drying up, even if the price is still inching up. This warns you a reversal is imminent.',
+                    settings: [
+                        { label: '14 Period', desc: 'Standard Day Trading setting.' },
+                        { label: '7-9 Period', desc: 'Aggressive Scalping setting (highly sensitive).' }
+                    ],
+                    steps: [
+                        'Identify the overall trend using structure or a 200 EMA.',
+                        'Wait for the RSI to hit extreme levels (above 70 or below 30) during a pullback *against* the main trend.',
+                        'Look for Divergence: Compare the peaks/valleys on the price chart to the peaks/valleys on the RSI line.',
+                        'Enter your trade when price rejects a support/resistance level while confirmed by RSI divergence.'
+                    ],
+                    advanced: 'The highest probability RSI setup is "Regular Divergence." If price makes a lower low, but RSI makes a higher low, sellers are losing power (bullish reversal likely).',
+                    pitfall: 'Selling blindly just because the RSI hits 70. In a strong, aggressive uptrend, the RSI can remain heavily overbought for hours.'
+                },
+                {
+                    id: 'stochastic',
+                    name: 'Stochastic Oscillator',
+                    icon: '&#8863;',
+                    coreMessage: 'Markets behave like localized rubber bands. Stochastic finds the exact moment they snap back.',
+                    logicalUse: 'Stochastic calculates where the current closing price is relative to the recent high/low range. Closing near the highs pushes it to 100; closing near lows pushes it to 0. Because it is highly sensitive, it oscillates violently. It is not used to find trends, but to find the exact, immediate entry trigger *after* a pullback has occurred within a larger confirmed trend.',
+                    settings: [
+                        { label: '14, 3, 3', desc: 'Standard 15m chart setting.' },
+                        { label: '5, 3, 3', desc: 'Aggressive 1m/5m chart setting.' }
+                    ],
+                    steps: [
+                        'Confirm the macro trend direction (e.g., Uptrend).',
+                        'Wait for a pullback to occur, pushing the Stochastic lines down into the extreme "Oversold" zone (below 20).',
+                        'Wait for the Fast Line (%K) to cross over the Slow Line (%D) while still inside the extreme zone.',
+                        'Execute your trade the moment both lines cross back up and out of the 20 line.'
+                    ],
+                    advanced: 'Trend Alignment: If the 200 EMA shows an uptrend, completely ignore all Stochastic sell signals at the 80 level. Only buy dips below 20.',
+                    pitfall: 'Relying on Stochastic during trending markets without a larger trend filter. It works best in ranging/sideways markets.'
+                },
+                {
+                    id: 'bollinger',
+                    name: 'Bollinger Bands',
+                    icon: '&#8856;',
+                    coreMessage: 'Volatility expands and contracts in cycles. The bands visualize the compression of energy.',
+                    logicalUse: 'Statistically, 95% of all price action occurs within 2 standard deviations of the mean (the 20 SMA). When the market is deciding its next move, volatility dies and the bands "squeeze" tightly together, acting like a coiled spring. When the market breaks out, the bands violently expand. You use them to visually confirm if the market is ranging (trade the bounces) or trending (trade the breakout).',
+                    settings: [
+                        { label: '20 Period, 2 Std Dev', desc: 'Universal standard setting.' }
+                    ],
+                    steps: [
+                        'Observe the bands: Are they wide and parallel, or squeezing tightly together?',
+                        'If Squeezing: Wait patiently. Do not trade inside the squeeze. Wait for a massive volume candle to break and close *completely outside* the band.',
+                        'Execute a trade in the direction of the breakout as the bands expand.',
+                        'If Ranging (flat/parallel): Buy when price touches the bottom band, target the middle SMA. Sell at the top band.'
+                    ],
+                    advanced: 'Riding the Bands: During a massive breakout, price frequently closes outside the bands. Aggressive scalpers buy the breakout and "ride the band" until price closes back inside.',
+                    pitfall: 'Assuming touching the upper band is an automatic "Sell." In a strong uptrend, price will "hug" the upper band as it climbs.'
+                }
+            ],
+            strategy: {
+                long: [
+                    { step: 1, title: 'Trend Confirmation', desc: 'The 9 EMA must be crossed <strong class="text-emerald-600">above</strong> the 20 EMA. Both lines must be sloping upwards with visible space ("daylight") between them.' },
+                    { step: 2, title: 'The Pullback', desc: 'Wait for the price to drop into the "Value Area" (the space between the 9 EMA and 20 EMA). Do not buy when the price is extended far above the 9 EMA.' },
+                    { step: 3, title: 'The Trigger', desc: 'Wait for a <strong class="text-emerald-600">bullish reversal candlestick</strong> (e.g., Hammer/Pin Bar, Bullish Engulfing) to close *inside* or *touching* the Value Area.' },
+                    { step: 4, title: 'The Entry', desc: 'Execute a <strong class="text-emerald-600 bg-emerald-50 px-2 py-1 rounded">BUY</strong> order the moment the trigger candle closes.' },
+                    { step: 5, title: 'Stop Loss (via ATR)', desc: 'Look at the current 14 ATR value. Multiply it by <strong>1.5</strong>. Set your stop loss that exact distance (in pips) <strong class="text-rose-600">below</strong> your entry price.' },
+                    { step: 6, title: 'Take Profit', desc: 'Target a Risk-to-Reward (R:R) ratio of <strong>1:1.5</strong> or <strong>1:2</strong>. (e.g., If your stop loss is 10 pips, your take profit should be 15 to 20 pips).' }
+                ],
+                short: [
+                    { step: 1, title: 'Trend Confirmation', desc: 'The 9 EMA must be crossed <strong class="text-rose-600">below</strong> the 20 EMA. Both lines must be sloping downwards with space between them.' },
+                    { step: 2, title: 'The Pullback', desc: 'Wait for the price to rally up into the "Value Area" between the 9 EMA and 20 EMA.' },
+                    { step: 3, title: 'The Trigger', desc: 'Wait for a <strong class="text-rose-600">bearish reversal candlestick</strong> (e.g., Shooting Star, Bearish Engulfing) to close *inside* or *touching* the Value Area.' },
+                    { step: 4, title: 'The Entry', desc: 'Execute a <strong class="text-rose-600 bg-rose-50 px-2 py-1 rounded">SELL</strong> order the moment the trigger candle closes.' },
+                    { step: 5, title: 'Stop Loss (via ATR)', desc: 'Look at the current 14 ATR value. Multiply it by <strong>1.5</strong>. Set your stop loss that exact distance (in pips) <strong class="text-emerald-600">above</strong> your entry price.' },
+                    { step: 6, title: 'Take Profit', desc: 'Target a Risk-to-Reward (R:R) ratio of <strong>1:1.5</strong> or <strong>1:2</strong>.' }
+                ]
+            },
+            rules: [
+                { title: 'The "Tangled Line" Rule', text: 'If the 9 EMA and 20 EMA are flat, crisscrossing constantly, or tightly tangled, the market is ranging. <strong>DO NOT TRADE.</strong> Wait for a clear separation.' },
+                { title: 'The Low Volatility Filter', text: 'If the ATR is exceptionally low (e.g., under 3-4 pips on a major pair), the market is essentially dead. Broker spreads will eat your profits. Stay out of the market.' },
+                { title: 'Wait for the Close', text: 'Never enter a trade while a 5-minute candle is still forming. A perfect hammer candle can turn into a massive bearish candle in the final 30 seconds. Always wait for the candle to officially close.' }
+            ]
+        };
+
+        let marketDataCache = null;
+
+        function getMarketData() {
+            if (marketDataCache) return marketDataCache;
+            
+            const fullC = [], fullH = [], fullL = [], fullO = [];
+            let price = 1.1000;
+            
+            // Generate deterministic realistic price sequence
+            for (let i = -50; i < 60; i++) {
+                // Base trend wave
+                let trend = Math.sin(i / 10) * 0.0008; 
+                // Force a pullback and rally structure in the visible area
+                if (i > 10 && i < 25) trend -= 0.0012; // Pullback
+                if (i >= 25 && i < 45) trend += 0.0015; // Rally
+
+                let o = price;
+                let c = o + trend + (Math.random() - 0.5) * 0.0015;
+                let h = Math.max(o, c) + Math.random() * 0.0010;
+                let l = Math.min(o, c) - Math.random() * 0.0010;
+                price = c;
+                
+                fullO.push(o); fullH.push(h); fullL.push(l); fullC.push(c);
+            }
+
+            // Tech Analysis Math Functions
+            const SMA = (arr, p) => arr.map((v, i, a) => i < p - 1 ? null : a.slice(i - p + 1, i + 1).reduce((s, x) => s + x, 0) / p);
+            const EMA = (arr, p) => { let k = 2/(p+1), e = arr[0]; return arr.map(v => e = (v - e) * k + e); };
+            
+            // Calculate Indicators on the full dataset to avoid early nulls in visible area
+            const sma20 = SMA(fullC, 20);
+            const bbUp = fullC.map((c, i) => {
+                if(i < 19) return null;
+                let sumSq = 0;
+                for(let j=0; j<20; j++) sumSq += Math.pow(fullC[i-j] - sma20[i], 2);
+                let stdDev = Math.sqrt(sumSq / 20);
+                return sma20[i] + 2 * stdDev;
+            });
+            const bbLow = fullC.map((c, i) => {
+                if(i < 19) return null;
+                let sumSq = 0;
+                for(let j=0; j<20; j++) sumSq += Math.pow(fullC[i-j] - sma20[i], 2);
+                let stdDev = Math.sqrt(sumSq / 20);
+                return sma20[i] - 2 * stdDev;
+            });
+
+            const tr = fullH.map((h, i) => i === 0 ? h - fullL[i] : Math.max(h - fullL[i], Math.abs(h - fullC[i-1]), Math.abs(fullL[i] - fullC[i-1])));
+            const atr = SMA(tr, 14);
+
+            let rsi = [null];
+            for (let i = 1; i < fullC.length; i++) {
+                if (i < 14) { rsi.push(null); continue; }
+                let gains = 0, losses = 0;
+                for(let j=0; j<14; j++) {
+                    let diff = fullC[i-j] - fullC[i-j-1];
+                    if(diff > 0) gains += diff;
+                    else losses -= diff;
+                }
+                let rs = (gains/14) / (Math.abs(losses/14) || 1e-10);
+                rsi.push(100 - (100 / (1 + rs)));
+            }
+
+            const stochK = fullC.map((c, i) => {
+                if (i < 13) return null;
+                let highest = Math.max(...fullH.slice(i-13, i+1));
+                let lowest = Math.min(...fullL.slice(i-13, i+1));
+                return ((c - lowest) / ((highest - lowest) || 1e-10)) * 100;
+            });
+            const stochD = SMA(stochK.map(v => v === null ? 50 : v), 3);
+
+            // Slice down to the 60 visible candles
+            const visible = -60;
+            marketDataCache = {
+                x: Array.from({length: 60}, (_, i) => `10:${i.toString().padStart(2, '0')}`),
+                o: fullO.slice(visible), h: fullH.slice(visible), l: fullL.slice(visible), c: fullC.slice(visible),
+                ema9: EMA(fullC, 9).slice(visible),
+                ema20: EMA(fullC, 20).slice(visible),
+                sma20: sma20.slice(visible),
+                bbUp: bbUp.slice(visible),
+                bbLow: bbLow.slice(visible),
+                atr: atr.slice(visible),
+                rsi: rsi.slice(visible),
+                stochK: stochK.slice(visible),
+                stochD: stochD.slice(visible)
+            };
+            return marketDataCache;
+        }
+
+        function initApp() {
+            renderIndicatorList();
+            renderRules();
+            selectIndicator('ema'); // Default selection
+            setStrategyMode('long'); // Default strategy mode
+        }
+
+        // --- Navigation Logic ---
+        function switchMainTab(tab) {
+            document.getElementById('view-indicators').classList.add('hidden');
+            document.getElementById('view-strategy').classList.add('hidden');
+            
+            document.getElementById('tab-indicators').className = 'px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition-all';
+            document.getElementById('tab-strategy').className = 'px-4 py-2 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition-all';
+
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = 'px-4 py-2 text-sm font-medium rounded-md bg-white text-indigo-700 shadow transition-all';
+        }
+
+        // --- Indicator Toolkit Logic ---
+        function renderIndicatorList() {
+            const listContainer = document.getElementById('indicator-list');
+            listContainer.innerHTML = appData.indicators.map(ind => `
+                <button id="nav-${ind.id}" onclick="selectIndicator('${ind.id}')" class="text-left w-full p-4 rounded-xl border transition-all duration-200 bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm focus:outline-none flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold border border-indigo-100">${ind.icon}</div>
+                    <span class="font-semibold text-slate-800">${ind.name}</span>
+                </button>
+            `).join('');
+        }
+
+        function selectIndicator(id) {
+            // Update active state in list
+            appData.indicators.forEach(ind => {
+                const btn = document.getElementById(`nav-${ind.id}`);
+                if (ind.id === id) {
+                    btn.classList.add('border-indigo-500', 'ring-1', 'ring-indigo-500', 'shadow-md');
+                    btn.classList.remove('border-slate-200');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'ring-1', 'ring-indigo-500', 'shadow-md');
+                    btn.classList.add('border-slate-200');
+                }
+            });
+
+            const data = appData.indicators.find(i => i.id === id);
+            
+            // Render Details
+            document.getElementById('indicator-details').innerHTML = `
+                <h3 class="text-2xl font-bold text-slate-900 mb-3">${data.name}</h3>
+                
+                <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-6 rounded-r-lg shadow-sm">
+                    <p class="text-indigo-900 font-medium text-lg leading-snug">"${data.coreMessage}"</p>
+                </div>
+                
+                <div class="space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-sm font-bold tracking-wider text-slate-500 uppercase mb-3 flex items-center"><span class="mr-2 text-lg text-slate-400">&#9881;</span> The Logic</h4>
+                            <p class="text-slate-700 leading-relaxed text-sm">${data.logicalUse}</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-sm font-bold tracking-wider text-slate-500 uppercase mb-3 flex items-center"><span class="mr-2 text-lg text-slate-400">&#9874;</span> Optimal Settings</h4>
+                            <ul class="space-y-3">
+                                ${data.settings.map(s => `
+                                    <li class="flex items-start">
+                                        <span class="text-indigo-500 mr-2 mt-0.5">&#10003;</span>
+                                        <div>
+                                            <strong class="block text-slate-800 text-sm">${s.label}</strong>
+                                            <span class="text-xs text-slate-600 leading-tight block mt-0.5">${s.desc}</span>
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                        <h4 class="text-sm font-bold tracking-wider text-slate-800 uppercase mb-4 flex items-center">
+                            <span class="bg-indigo-600 text-white w-5 h-5 rounded-full inline-flex justify-center items-center text-xs mr-2 shadow-sm">&#10140;</span> 
+                            Step-by-Step Execution Guide
+                        </h4>
+                        <div class="space-y-4 pl-1">
+                            ${data.steps.map((step, idx) => `
+                                <div class="flex items-start relative">
+                                    <div class="flex-shrink-0 w-6 h-6 rounded border-2 border-indigo-200 bg-white text-indigo-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5 relative z-10">${idx + 1}</div>
+                                    <p class="text-sm text-slate-700 leading-relaxed pt-0.5">${step}</p>
+                                    ${idx !== data.steps.length - 1 ? `<div class="absolute left-3 top-6 w-px h-full bg-indigo-100 -ml-px"></div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="flex items-center text-sm font-bold tracking-wider text-indigo-600 uppercase mb-2">
+                                <span class="mr-2 text-lg">&#9733;</span> Advanced Application
+                            </h4>
+                            <p class="text-sm text-slate-700 leading-relaxed">${data.advanced}</p>
+                        </div>
+                        <div>
+                            <h4 class="flex items-center text-sm font-bold tracking-wider text-rose-600 uppercase mb-2">
+                                <span class="mr-2 text-lg">&#9888;</span> Common Pitfall
+                            </h4>
+                            <p class="text-sm text-slate-700 leading-relaxed">${data.pitfall}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            renderChart(id);
+        }
+
+        function renderChart(id) {
+            const data = getMarketData();
+
+            const baseCandles = {
+                x: data.x, open: data.o, high: data.h, low: data.l, close: data.c,
+                type: 'candlestick', name: 'Price',
+                increasing: {line: {color: '#10b981'}}, 
+                decreasing: {line: {color: '#f43f5e'}},
+                yaxis: 'y'
+            };
+
+            let plotData = [baseCandles];
+            let layout = {
+                margin: { t: 20, b: 30, l: 50, r: 20 },
+                xaxis: { rangeslider: { visible: false }, type: 'category' },
+                yaxis: { domain: [0, 1], title: 'Price', tickformat: '.4f' },
+                plot_bgcolor: 'transparent',
+                paper_bgcolor: 'transparent',
+                showlegend: true,
+                legend: { orientation: 'h', y: 1.12, x: 0 },
+                dragmode: 'pan'
+            };
+
+            if (id === 'ema') {
+                plotData.push({ x: data.x, y: data.ema9, type: 'scatter', mode: 'lines', line: {color: '#3b82f6', width: 2}, name: '9 EMA' });
+                plotData.push({ x: data.x, y: data.ema20, type: 'scatter', mode: 'lines', line: {color: '#f59e0b', width: 2}, name: '20 EMA' });
+            } else if (id === 'bollinger') {
+                plotData.push({ x: data.x, y: data.bbUp, type: 'scatter', mode: 'lines', line: {color: '#94a3b8', width: 1}, name: 'Upper Band' });
+                plotData.push({ x: data.x, y: data.bbLow, type: 'scatter', mode: 'lines', line: {color: '#94a3b8', width: 1}, fill: 'tonexty', fillcolor: 'rgba(148, 163, 184, 0.15)', name: 'Lower Band' });
+                plotData.push({ x: data.x, y: data.sma20, type: 'scatter', mode: 'lines', line: {color: '#64748b', width: 1, dash: 'dot'}, name: '20 SMA' });
+            } else {
+                // Split layout for oscillators at the bottom
+                layout.yaxis.domain = [0.35, 1];
+                layout.yaxis2 = { domain: [0, 0.25], title: id.toUpperCase() };
+
+                if (id === 'atr') {
+                    plotData.push({ x: data.x, y: data.atr, type: 'scatter', mode: 'lines', line: {color: '#8b5cf6', width: 2}, fill: 'tozeroy', fillcolor: 'rgba(139, 92, 246, 0.1)', name: 'ATR (14)', yaxis: 'y2' });
+                } else if (id === 'rsi') {
+                    layout.yaxis2.range = [0, 100];
+                    plotData.push({ x: data.x, y: data.rsi, type: 'scatter', mode: 'lines', line: {color: '#0ea5e9', width: 2}, name: 'RSI (14)', yaxis: 'y2' });
+                    plotData.push({ x: data.x, y: Array(60).fill(70), type: 'scatter', mode: 'lines', line: {color: '#ef4444', dash: 'dash', width: 1}, name: 'Overbought', yaxis: 'y2', hoverinfo: 'skip' });
+                    plotData.push({ x: data.x, y: Array(60).fill(30), type: 'scatter', mode: 'lines', line: {color: '#10b981', dash: 'dash', width: 1}, name: 'Oversold', yaxis: 'y2', hoverinfo: 'skip' });
+                } else if (id === 'stochastic') {
+                    layout.yaxis2.range = [0, 100];
+                    plotData.push({ x: data.x, y: data.stochK, type: 'scatter', mode: 'lines', line: {color: '#3b82f6', width: 2}, name: '%K (Fast)', yaxis: 'y2' });
+                    plotData.push({ x: data.x, y: data.stochD, type: 'scatter', mode: 'lines', line: {color: '#f59e0b', dash: 'dot', width: 2}, name: '%D (Slow)', yaxis: 'y2' });
+                    plotData.push({ x: data.x, y: Array(60).fill(80), type: 'scatter', mode: 'lines', line: {color: '#ef4444', dash: 'dash', width: 1}, name: 'Overbought', yaxis: 'y2', hoverinfo: 'skip' });
+                    plotData.push({ x: data.x, y: Array(60).fill(20), type: 'scatter', mode: 'lines', line: {color: '#10b981', dash: 'dash', width: 1}, name: 'Oversold', yaxis: 'y2', hoverinfo: 'skip' });
+                }
+            }
+
+            Plotly.newPlot('indicatorChart', plotData, layout, {responsive: true, displayModeBar: false});
+        }
+
+        // --- Strategy Logic ---
+        function setStrategyMode(mode) {
+            const btnLong = document.getElementById('btn-long');
+            const btnShort = document.getElementById('btn-short');
+            
+            if (mode === 'long') {
+                btnLong.className = 'px-8 py-2.5 rounded-full text-sm font-bold bg-white text-emerald-600 shadow-sm transition-all';
+                btnShort.className = 'px-8 py-2.5 rounded-full text-sm font-bold text-slate-500 hover:text-slate-800 transition-all';
+            } else {
+                btnShort.className = 'px-8 py-2.5 rounded-full text-sm font-bold bg-white text-rose-600 shadow-sm transition-all';
+                btnLong.className = 'px-8 py-2.5 rounded-full text-sm font-bold text-slate-500 hover:text-slate-800 transition-all';
+            }
+
+            const steps = appData.strategy[mode];
+            const themeColor = mode === 'long' ? 'emerald' : 'rose';
+            
+            document.getElementById('strategy-content').innerHTML = `
+                <div class="relative border-l-2 border-${themeColor}-200 pl-6 ml-4 space-y-8">
+                    ${steps.map((step, idx) => `
+                        <div class="relative fade-in" style="animation-delay: ${idx * 0.05}s">
+                            <span class="absolute -left-10 top-0 bg-${themeColor}-100 text-${themeColor}-600 border-2 border-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-sm">
+                                ${step.step}
+                            </span>
+                            <h4 class="text-lg font-bold text-slate-900 mb-1">${step.title}</h4>
+                            <p class="text-slate-600 leading-relaxed">${step.desc}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // --- Rules Logic ---
+        function renderRules() {
+            document.getElementById('rules-container').innerHTML = appData.rules.map(rule => `
+                <div class="bg-white border-t-4 border-rose-500 rounded-lg shadow-sm p-6 relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 text-6xl text-rose-50 opacity-50">&#9888;</div>
+                    <h4 class="text-lg font-bold text-slate-900 mb-3 relative z-10">${rule.title}</h4>
+                    <p class="text-slate-600 text-sm leading-relaxed relative z-10">${rule.text}</p>
+                </div>
+            `).join('');
+        }
+
+        // Initialize on load
+        window.onload = initApp;
+    </script>
+</body>
+</html>

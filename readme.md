@@ -1,0 +1,1 @@
+https://samindaonline.github.io/fx-scalp-book/
